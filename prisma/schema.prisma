@@ -1,0 +1,170 @@
+// 融研AI 数据库模型
+// 数据库：PostgreSQL（Neon / Supabase / Prisma Postgres 均可）
+// 注意：列表/枚举统一用 String 存储（JSON 序列化或纯文本），便于跨库迁移。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String   // bcrypt 哈希后的密码
+  name      String?
+  image     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联：一个用户拥有多条各类业务数据
+  wrongQuestions  WrongQuestion[]
+  papers          Paper[]
+  dataSets        DataSet[]
+  dataCharts      DataChart[]
+  experimentLogs  ExperimentLog[]
+  jobApplications JobApplication[]
+  aiUsageLogs     AiUsageLog[]
+}
+
+// 错题本（复习助手）
+model WrongQuestion {
+  id             String   @id @default(cuid())
+  userId         String
+  subject        String   @default("未分类") // 学科，如 "高等数学"
+  question       String   // 题干
+  answer         String?  // 正确答案/参考解答
+  analysis       String?  // AI 解析/解题思路
+  knowledgePoint String?  // 知识点标签，逗号分隔，如 "极限,洛必达法则"
+  formulas       String?  // 核心公式，JSON 数组：["lim f(x)/g(x)","f'(x)"]
+  source         String?  @default("manual") // 来源：manual / review / ocr
+  mastery        String?  @default("new") // 掌握度：new / learning / mastered
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, mastery])
+  @@index([userId, updatedAt])
+}
+
+// 文献库及解析文本（文献助手）
+model Paper {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  authors     String?  // JSON 数组：["张三","李四"]
+  abstract    String?
+  fullText    String?  // 解析后的全文文本
+  paragraphs  String?  // JSON 数组：[{index:1, text:"..."}]，按段落切分编号，供溯源引用
+  pageCount   Int?     // PDF 总页数
+  filePath    String?  // 原始 PDF 文件名（文件不落盘，仅记录来源名）
+  tags        String?  // JSON 数组：["CV","融合感知"]
+  summary     String?  // JSON：{background, methods, results, limitations}
+  translation String?  // JSON：{zh:"中文摘要", en:"English abstract"} 速读卡翻译缓存
+  favorite    Boolean  @default(false) // 是否收藏
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+  @@index([userId, favorite])
+}
+
+// 科研数据集（数据洞察）
+model DataSet {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String   // 数据集名称（默认取文件名去扩展名）
+  sourceName  String?  // 原始文件名（文件不落盘，仅记录来源名）
+  rowCount    Int      @default(0) // 实际解析行数（上限 1000）
+  columnCount Int      @default(0)
+  columns     String   // JSON 数组：[{name,type,missing,unique,min,max,mean,samples}]
+  rows        String   // JSON 二维数组：[[v1,v2,...]]，列顺序与 columns 一致
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  charts DataChart[]
+
+  @@index([userId, updatedAt])
+}
+
+// AI 生成的图表与解读（数据洞察）
+model DataChart {
+  id        String   @id @default(cuid())
+  userId    String
+  dataSetId String
+  title     String   // 图表标题
+  chartType String   // scatter / line / bar / heatmap 等
+  prompt    String?  // 自然语言需求（推荐模式为空）
+  mode      String   @default("prompt") // prompt（自然语言出图）/ recommend（AI 推荐）
+  option    String   // JSON：标准 ECharts option
+  insight   String?  // AI 文字解读
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dataSet DataSet @relation(fields: [dataSetId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([dataSetId, createdAt])
+}
+
+// 实验台账（实验记录管理）
+model ExperimentLog {
+  id             String    @id @default(cuid())
+  userId         String
+  title          String
+  purpose        String?   // 实验目的
+  procedure      String?   // 实验步骤
+  parameters     String?   // JSON：实验参数键值对
+  observations   String?   // 实验现象
+  conclusion     String?   // 实验结论
+  aiSummary      String?   // AI 自动归纳
+  experimentDate DateTime? // 实验发生日期
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// 求职进度看板（求职助手）
+model JobApplication {
+  id            String    @id @default(cuid())
+  userId        String
+  company       String
+  position      String
+  jobUrl        String?
+  status        String    @default("applied") // applied / interviewing / offer / rejected / archived
+  appliedDate   DateTime?
+  interviewDate DateTime?
+  salary        String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// AI 调用与 Token 用量台账（统一记录 /api/chat 的每次对话）
+model AiUsageLog {
+  id           String   @id @default(cuid())
+  userId       String
+  tier         String   // 模型档位：light（轻量）/ strong（强）
+  scenario     String?  // 业务场景：general / review / papers / data / experiments / lab / jobs
+  provider     String?  // 供应商标识，如 deepseek / qwen / mock
+  model        String   // 实际调用的模型 ID
+  inputTokens  Int      @default(0) // 输入（prompt）Token 数
+  outputTokens Int      @default(0) // 输出（completion）Token 数
+  totalTokens  Int      @default(0) // 本次调用总 Token 数
+  mock         Boolean  @default(false) // 是否为本地 Mock 调用（未配置真实 Key）
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
