@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // standalone：产出 .next/standalone（含 server.js 与所需 node_modules），
+  // 便于独立 Node.js 环境/容器部署，Vercel 上同样兼容。
+  output: "standalone",
   // 不启用 Next 16 的 Cache Components（静态外壳 + use cache 模型）。
   // 本项目为按用户动态查库的学研助手，保持经典 App Router 渲染模型更简单稳健，
   // 受保护路由用 `export const dynamic = "force-dynamic"` 标记为请求时渲染。
@@ -21,12 +24,13 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
-  // 从构建追踪中排除 Prisma，减少 .next 产物复制。
-  outputFileTracingExcludes: {
+  // standalone 产物只包含被追踪到的文件，Prisma 引擎与 pdf-parse 必须显式带上，
+  // 否则运行时会因找不到 query engine / pdf.worker 而启动失败。
+  outputFileTracingIncludes: {
     "/*": [
+      "./node_modules/.prisma/client/**",
       "./node_modules/@prisma/client/**",
-      "./node_modules/.prisma/**",
-      "./node_modules/@prisma/engines/**",
+      "./node_modules/pdf-parse/**",
     ],
   },
 };
