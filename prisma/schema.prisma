@@ -14,20 +14,29 @@ datasource db {
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
-  password  String   // bcrypt 哈希后的密码
+  password  String // bcrypt 哈希后的密码
   name      String?
   image     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // 关联：一个用户拥有多条各类业务数据
-  wrongQuestions  WrongQuestion[]
-  papers          Paper[]
-  dataSets        DataSet[]
-  dataCharts      DataChart[]
-  experimentLogs  ExperimentLog[]
-  jobApplications JobApplication[]
-  aiUsageLogs     AiUsageLog[]
+  wrongQuestions      WrongQuestion[]
+  papers              Paper[]
+  dataSets            DataSet[]
+  dataCharts          DataChart[]
+  experimentLogs      ExperimentLog[]
+  jobApplications     JobApplication[]
+  aiUsageLogs         AiUsageLog[]
+  projects            Project[]
+  projectTasks        ProjectTask[]
+  fileAssets          FileAsset[]
+  paperChunks         PaperChunk[]
+  researchNotes       ResearchNote[]
+  datasetVersions     DatasetVersion[]
+  experimentRuns      ExperimentRun[]
+  simulationSnapshots SimulationSnapshot[]
+  resourceLinks       ResourceLink[]
 }
 
 // 错题本（复习助手）
@@ -35,11 +44,11 @@ model WrongQuestion {
   id             String   @id @default(cuid())
   userId         String
   subject        String   @default("未分类") // 学科，如 "高等数学"
-  question       String   // 题干
-  answer         String?  // 正确答案/参考解答
-  analysis       String?  // AI 解析/解题思路
-  knowledgePoint String?  // 知识点标签，逗号分隔，如 "极限,洛必达法则"
-  formulas       String?  // 核心公式，JSON 数组：["lim f(x)/g(x)","f'(x)"]
+  question       String // 题干
+  answer         String? // 正确答案/参考解答
+  analysis       String? // AI 解析/解题思路
+  knowledgePoint String? // 知识点标签，逗号分隔，如 "极限,洛必达法则"
+  formulas       String? // 核心公式，JSON 数组：["lim f(x)/g(x)","f'(x)"]
   source         String?  @default("manual") // 来源：manual / review / ocr
   mastery        String?  @default("new") // 掌握度：new / learning / mastered
   createdAt      DateTime @default(now())
@@ -55,21 +64,24 @@ model WrongQuestion {
 model Paper {
   id          String   @id @default(cuid())
   userId      String
+  fileAssetId String?  @unique // 关联统一文件资产
   title       String
-  authors     String?  // JSON 数组：["张三","李四"]
+  authors     String? // JSON 数组：["张三","李四"]
   abstract    String?
-  fullText    String?  // 解析后的全文文本
-  paragraphs  String?  // JSON 数组：[{index:1, text:"..."}]，按段落切分编号，供溯源引用
-  pageCount   Int?     // PDF 总页数
-  filePath    String?  // 原始 PDF 文件名（文件不落盘，仅记录来源名）
-  tags        String?  // JSON 数组：["CV","融合感知"]
-  summary     String?  // JSON：{background, methods, results, limitations}
-  translation String?  // JSON：{zh:"中文摘要", en:"English abstract"} 速读卡翻译缓存
+  fullText    String? // 解析后的全文文本
+  paragraphs  String? // JSON 数组：[{index:1, text:"..."}]，按段落切分编号，供溯源引用
+  pageCount   Int? // PDF 总页数
+  filePath    String? // 【废弃】原始 PDF 文件名，改用 FileAsset
+  tags        String? // JSON 数组：["CV","融合感知"]
+  summary     String? // JSON：{background, methods, results, limitations}
+  translation String? // JSON：{zh:"中文摘要", en:"English abstract"} 速读卡翻译缓存
   favorite    Boolean  @default(false) // 是否收藏
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileAsset FileAsset?   @relation(fields: [fileAssetId], references: [id], onDelete: SetNull)
+  chunks    PaperChunk[]
 
   @@index([userId, updatedAt])
   @@index([userId, favorite])
@@ -79,17 +91,20 @@ model Paper {
 model DataSet {
   id          String   @id @default(cuid())
   userId      String
-  name        String   // 数据集名称（默认取文件名去扩展名）
-  sourceName  String?  // 原始文件名（文件不落盘，仅记录来源名）
+  fileAssetId String?  @unique // 关联统一文件资产
+  name        String // 数据集名称（默认取文件名去扩展名）
+  sourceName  String? // 【废弃】原始文件名，改用 FileAsset
   rowCount    Int      @default(0) // 实际解析行数（上限 1000）
   columnCount Int      @default(0)
-  columns     String   // JSON 数组：[{name,type,missing,unique,min,max,mean,samples}]
-  rows        String   // JSON 二维数组：[[v1,v2,...]]，列顺序与 columns 一致
+  columns     String // JSON 数组：[{name,type,missing,unique,min,max,mean,samples}]
+  rows        String // JSON 二维数组：[[v1,v2,...]]，列顺序与 columns 一致
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  charts DataChart[]
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileAsset FileAsset?       @relation(fields: [fileAssetId], references: [id], onDelete: SetNull)
+  charts    DataChart[]
+  versions  DatasetVersion[]
 
   @@index([userId, updatedAt])
 }
@@ -99,12 +114,12 @@ model DataChart {
   id        String   @id @default(cuid())
   userId    String
   dataSetId String
-  title     String   // 图表标题
-  chartType String   // scatter / line / bar / heatmap 等
-  prompt    String?  // 自然语言需求（推荐模式为空）
+  title     String // 图表标题
+  chartType String // scatter / line / bar / heatmap 等
+  prompt    String? // 自然语言需求（推荐模式为空）
   mode      String   @default("prompt") // prompt（自然语言出图）/ recommend（AI 推荐）
-  option    String   // JSON：标准 ECharts option
-  insight   String?  // AI 文字解读
+  option    String // JSON：标准 ECharts option
+  insight   String? // AI 文字解读
   createdAt DateTime @default(now())
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -119,17 +134,18 @@ model ExperimentLog {
   id             String    @id @default(cuid())
   userId         String
   title          String
-  purpose        String?   // 实验目的
-  procedure      String?   // 实验步骤
-  parameters     String?   // JSON：实验参数键值对
-  observations   String?   // 实验现象
-  conclusion     String?   // 实验结论
-  aiSummary      String?   // AI 自动归纳
+  purpose        String? // 实验目的
+  procedure      String? // 实验步骤
+  parameters     String? // JSON：实验参数键值对
+  observations   String? // 实验现象
+  conclusion     String? // 实验结论
+  aiSummary      String? // AI 自动归纳
   experimentDate DateTime? // 实验发生日期
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs ExperimentRun[]
 }
 
 // 求职进度看板（求职助手）
@@ -154,10 +170,10 @@ model JobApplication {
 model AiUsageLog {
   id           String   @id @default(cuid())
   userId       String
-  tier         String   // 模型档位：light（轻量）/ strong（强）
-  scenario     String?  // 业务场景：general / review / papers / data / experiments / lab / jobs
-  provider     String?  // 供应商标识，如 deepseek / qwen / mock
-  model        String   // 实际调用的模型 ID
+  tier         String // 模型档位：light（轻量）/ strong（强）
+  scenario     String? // 业务场景：general / review / papers / data / experiments / lab / jobs
+  provider     String? // 供应商标识，如 deepseek / qwen / mock
+  model        String // 实际调用的模型 ID
   inputTokens  Int      @default(0) // 输入（prompt）Token 数
   outputTokens Int      @default(0) // 输出（completion）Token 数
   totalTokens  Int      @default(0) // 本次调用总 Token 数
@@ -167,4 +183,200 @@ model AiUsageLog {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+// ===== 阶段B新增模型：统一项目空间与资源关联 =====
+
+// 科研项目空间
+model Project {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  status      String    @default("active") // active / archived / completed
+  tags        String? // JSON 数组：["CV论文","2025大创"]
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks               ProjectTask[]
+  files               FileAsset[]
+  notes               ResearchNote[]
+  resources           ResourceLink[]
+  experimentRuns      ExperimentRun[]
+  simulationSnapshots SimulationSnapshot[]
+
+  @@index([userId, updatedAt])
+  @@index([userId, status])
+}
+
+// 项目任务
+model ProjectTask {
+  id          String    @id @default(cuid())
+  projectId   String
+  userId      String
+  title       String
+  description String?
+  status      String    @default("todo") // todo / in_progress / done / blocked
+  priority    String    @default("medium") // low / medium / high
+  dueDate     DateTime?
+  assignee    String? // 协作用户ID（后续扩展协作功能）
+  tags        String? // JSON 数组：["文献调研","数据分析"]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
+  @@index([userId, updatedAt])
+}
+
+// 统一文件资产（所有上传文件的统一管理）
+model FileAsset {
+  id          String   @id @default(cuid())
+  userId      String
+  projectId   String? // 关联项目（可选，未归类文件为空）
+  fileName    String // 原始文件名
+  fileType    String // 文件类型：pdf / csv / xlsx / image / doc / other
+  fileSize    Int // 文件大小（字节）
+  storagePath String // 存储路径（本地相对路径或对象存储key）
+  hash        String // 文件哈希值，用于去重
+  mimeType    String?
+  tags        String? // JSON 数组：["文献","实验数据"]
+  metadata    String? // JSON 扩展元数据
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project  Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  papers   Paper[]
+  datasets DataSet[]
+
+  @@index([userId, fileType])
+  @@index([userId, createdAt])
+  @@index([hash])
+}
+
+// 文献页级分块（支持精确溯源）
+model PaperChunk {
+  id         String   @id @default(cuid())
+  paperId    String
+  userId     String
+  pageNumber Int // 页码（从1开始）
+  chunkIndex Int // 块序号（同一页内的分块）
+  content    String // 分块文本内容
+  startIndex Int // 在全文中的起始位置
+  endIndex   Int // 在全文中的结束位置
+  embedding  String? // 向量嵌入（JSON数组，后续支持语义检索）
+  createdAt  DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paper Paper @relation(fields: [paperId], references: [id], onDelete: Cascade)
+
+  @@index([paperId, pageNumber])
+  @@index([userId, createdAt])
+}
+
+// 研究笔记
+model ResearchNote {
+  id         String   @id @default(cuid())
+  userId     String
+  projectId  String?
+  title      String
+  content    String // Markdown 内容
+  tags       String? // JSON 数组：["文献笔记","实验思考"]
+  isArchived Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, updatedAt])
+  @@index([userId, isArchived])
+}
+
+// 数据集版本
+model DatasetVersion {
+  id        String   @id @default(cuid())
+  datasetId String
+  userId    String
+  version   String // 版本号：v1.0.0
+  changeLog String? // 变更说明
+  rowCount  Int      @default(0)
+  columns   String // JSON 数组，与 DataSet 格式一致
+  rows      String // JSON 二维数组，快照数据
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dataset DataSet @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+
+  @@index([datasetId, version])
+  @@index([userId, createdAt])
+}
+
+// 实验运行记录
+model ExperimentRun {
+  id              String    @id @default(cuid())
+  experimentLogId String
+  userId          String
+  projectId       String?
+  runNumber       Int // 第几次运行
+  status          String    @default("running") // running / completed / failed
+  parameters      String? // JSON 运行参数
+  results         String? // JSON 运行结果
+  metrics         String? // JSON 性能指标
+  durationMs      Int? // 运行时长（毫秒）
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  experimentLog ExperimentLog @relation(fields: [experimentLogId], references: [id], onDelete: Cascade)
+  project       Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([experimentLogId, runNumber])
+  @@index([userId, status])
+}
+
+// 原理实验室仿真快照
+model SimulationSnapshot {
+  id             String   @id @default(cuid())
+  userId         String
+  projectId      String?
+  simulationType String // 仿真类型：pendulum / projectile / sensor-fusion
+  name           String
+  parameters     String // JSON 快照参数
+  screenshot     String? // 截图文件路径
+  notes          String? // 备注
+  createdAt      DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, simulationType])
+  @@index([userId, createdAt])
+}
+
+// 资源关联与证据链（跨模块资源关联）
+model ResourceLink {
+  id           String   @id @default(cuid())
+  userId       String
+  projectId    String?
+  sourceType   String // 来源类型：task / note / paper / dataset / experiment / simulation
+  sourceId     String // 来源ID
+  targetType   String // 目标类型：file / paper / dataset / note / experiment / run / snapshot
+  targetId     String // 目标ID
+  relationType String // 关联类型：reference / attachment / evidence / related
+  description  String? // 关联说明
+  createdAt    DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceType, sourceId, targetType, targetId])
+  @@index([userId, sourceType, sourceId])
+  @@index([userId, targetType, targetId])
 }

@@ -42,7 +42,15 @@ export async function PATCH(request: Request, props: { params: Params }) {
     const body = await request.json();
     const validated = UpdateJobApplicationSchema.parse(body);
 
-    const updateData: any = {};
+    const updateData: Partial<{
+      company: string;
+      position: string;
+      status: string;
+      interviewTime: Date | null;
+      notes: string | null;
+      offerDetails: string | null;
+      salary: string | null;
+    }> = {};
     if (validated.company !== undefined) updateData.company = validated.company;
     if (validated.position !== undefined) updateData.position = validated.position;
     if (validated.status !== undefined) updateData.status = validated.status;

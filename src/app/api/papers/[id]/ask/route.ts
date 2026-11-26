@@ -7,6 +7,8 @@ import {
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getChatModel } from "@/lib/ai/models";
+import { checkRateLimit, checkQuota, logUsage } from "@/lib/ai/gateway";
+import { withErrorHandler, NotFoundError } from "@/lib/errors";
 import type { PaperParagraph } from "@/lib/literature/types";
 
 // 溯源问答（防幻觉）：服务端注入编号原文段落，强约束 AI 只能依据原文回答并标注 [段落 N]。
@@ -50,10 +52,10 @@ function buildParagraphContext(paragraphs: PaperParagraph[]): {
   };
 }
 
-export async function POST(
+export const POST = withErrorHandler(async (
   request: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) {
@@ -63,7 +65,7 @@ export async function POST(
   const { id } = await params;
   const paper = await prisma.paper.findUnique({ where: { id } });
   if (!paper || paper.userId !== userId) {
-    return Response.json({ error: "文献不存在或无权访问" }, { status: 404 });
+    throw new NotFoundError("文献不存在或无权访问");
   }
 
   let paragraphs: PaperParagraph[] = [];
@@ -121,6 +123,10 @@ export async function POST(
     ? "\n（注意：原文较长，仅提供了前序段落作为上下文，超出部分未包含）"
     : "";
 
+  // 检查速率限制和配额
+  await checkRateLimit(userId);
+  await checkQuota(userId, "papers");
+
   const { model, modelId, provider, mock } = await getChatModel("light");
 
   const result = streamText({
@@ -138,19 +144,15 @@ export async function POST(
       try {
         const inputTokens = usage.inputTokens ?? 0;
         const outputTokens = usage.outputTokens ?? 0;
-        await prisma.aiUsageLog.create({
-          data: {
-            userId,
-            tier: "light",
-            scenario: "papers",
-            provider,
-            model: modelId,
-            inputTokens,
-            outputTokens,
-            totalTokens: usage.totalTokens ?? inputTokens + outputTokens,
-            mock,
-          },
-        });
+        await logUsage(
+          userId,
+          "papers",
+          modelId,
+          provider,
+          "light",
+          inputTokens,
+          outputTokens
+        );
       } catch (error) {
         console.error("[papers/ask] 写入 AiUsageLog 失败:", error);
       }
@@ -166,4 +168,4 @@ export async function POST(
       },
     }),
   });
-}
+});

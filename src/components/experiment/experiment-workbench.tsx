@@ -42,8 +42,9 @@ export function ExperimentWorkbench() {
   }
 
   useEffect(() => {
-    loadLogs();
-  }, []);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadLogs();
+  }, [loadLogs]);
 
   // 筛选
   function handleFilter() {
@@ -118,7 +119,7 @@ export function ExperimentWorkbench() {
   }
 
   // 提交创建
-  async function handleCreate(data: any) {
+  async function handleCreate(data: Partial<ExperimentLogDetail>) {
     setSubmitting(true);
     try {
       await createExperiment(data);
@@ -130,7 +131,7 @@ export function ExperimentWorkbench() {
   }
 
   // 提交更新
-  async function handleUpdate(data: any) {
+  async function handleUpdate(data: Partial<ExperimentLogDetail>) {
     if (!currentLog) return;
     setSubmitting(true);
     try {

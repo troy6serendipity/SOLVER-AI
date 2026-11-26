@@ -4,11 +4,18 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "prisma generate && prisma migrate deploy && next build --webpack",
+    "build": "prisma generate && next build --webpack",
     "postinstall": "prisma generate",
-    "db:deploy": "prisma migrate deploy",
+    "db:generate": "prisma generate",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:ci": "jest --ci --coverage"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.122",
@@ -36,15 +43,21 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.5",
     "@tailwindcss/turbopack": "4.3.3",
+    "@testing-library/jest-dom": "^8.0.0",
+    "@testing-library/react": "^16.3.3",
     "@types/bcryptjs": "^2.4.6",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
+    "jest": "^30.5.2",
+    "jest-environment-jsdom": "^30.5.2",
     "prisma": "^6.19.0",
     "tailwindcss": "4.3.3",
+    "ts-jest": "^29.4.15",
     "typescript": "^5"
   }
 }

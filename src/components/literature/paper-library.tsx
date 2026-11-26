@@ -68,6 +68,7 @@ export function PaperLibrary({ refreshKey, onOpen }: PaperLibraryProps) {
   }, [keyword, favoriteOnly, tagFilter]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load, refreshKey]);
 

@@ -6,6 +6,7 @@ import {
   normalizeTags,
 } from "@/lib/ai/papers-service";
 import { toPaperDetail, toPaperListItem } from "@/lib/literature/serialize";
+import { storeFile } from "@/lib/storage/local-adapter";
 import type { Prisma } from "@prisma/client";
 
 // 文献库集合路由：GET 列表检索 / POST 上传解析
@@ -112,12 +113,42 @@ export async function POST(request: Request) {
     }
   }
 
-  // 1. 内存中解析 PDF（不落盘）
+  // 1. 存储PDF文件到本地存储
   const buffer = Buffer.from(await file.arrayBuffer());
+  let storedFile;
+  let fileAsset;
+  try {
+    storedFile = await storeFile(file, "pdf", userId);
+    // 创建FileAsset记录
+    fileAsset = await prisma.fileAsset.create({
+      data: {
+        userId,
+        fileName: storedFile.fileName,
+        fileType: storedFile.category,
+        fileSize: storedFile.fileSize,
+        storagePath: storedFile.filePath,
+        hash: storedFile.hash,
+        mimeType: storedFile.mimeType,
+      },
+    });
+  } catch (error) {
+    console.error("[papers/upload] 文件存储失败:", error);
+    return Response.json(
+      { error: "文件存储失败，请稍后重试" },
+      { status: 500 }
+    );
+  }
+
+  // 2. 解析 PDF
   let extraction;
   try {
     extraction = await extractPdf(buffer);
   } catch (error) {
+    // 解析失败，回滚删除已存储的文件和FileAsset
+    if (fileAsset) {
+      await prisma.fileAsset.delete({ where: { id: fileAsset.id } });
+      // 这里可以加上删除物理文件的逻辑，暂时先不删便于排查问题
+    }
     if (error instanceof PdfExtractError) {
       return Response.json({ error: error.message }, { status: 422 });
     }
@@ -128,15 +159,16 @@ export async function POST(request: Request) {
     );
   }
 
-  // 2. 落库（先无速读卡，保证上传主链路成功）
+  // 3. 落库（先无速读卡，保证上传主链路成功）
   const paper = await prisma.paper.create({
     data: {
       userId,
+      fileAssetId: fileAsset.id,
       title,
       fullText: extraction.fullText,
       paragraphs: JSON.stringify(extraction.paragraphs),
       pageCount: extraction.pageCount,
-      filePath: file.name,
+      filePath: file.name, // 保留旧字段兼容历史数据
       tags: tags.length > 0 ? JSON.stringify(tags) : null,
     },
   });
