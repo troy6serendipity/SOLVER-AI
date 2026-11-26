@@ -1,6 +1,7 @@
 import { generateText } from "ai";
 import { prisma } from "@/lib/prisma";
 import { getChatModel } from "./models";
+import { checkRateLimit, checkQuota, logUsage } from "./gateway";
 import { extractJson, sanitizeTagList } from "./review-service";
 import type { SummaryCards } from "@/lib/literature/types";
 
@@ -16,6 +17,11 @@ async function runPapersGenerate(params: {
   temperature?: number;
 }) {
   const { userId, system, prompt, temperature } = params;
+
+  // 检查速率限制和配额
+  await checkRateLimit(userId);
+  await checkQuota(userId, "papers");
+
   const { model, modelId, provider, mock } = await getChatModel("light");
 
   const result = await generateText({
@@ -28,19 +34,15 @@ async function runPapersGenerate(params: {
   try {
     const inputTokens = result.usage.inputTokens ?? 0;
     const outputTokens = result.usage.outputTokens ?? 0;
-    await prisma.aiUsageLog.create({
-      data: {
-        userId,
-        tier: "light",
-        scenario: "papers",
-        provider,
-        model: modelId,
-        inputTokens,
-        outputTokens,
-        totalTokens: result.usage.totalTokens ?? inputTokens + outputTokens,
-        mock,
-      },
-    });
+    await logUsage(
+      userId,
+      "papers",
+      modelId,
+      provider,
+      "light",
+      inputTokens,
+      outputTokens
+    );
   } catch (error) {
     console.error("[papers] 写入 AiUsageLog 失败:", error);
   }

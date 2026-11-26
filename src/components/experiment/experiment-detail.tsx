@@ -13,22 +13,18 @@ interface ExperimentDetailProps {
 }
 
 export function ExperimentDetail({ log, onBack, onEdit }: ExperimentDetailProps) {
-  const [summary, setSummary] = useState<AiExperimentSummaryResponse | null>(null);
-  const [loadingSummary, setLoadingSummary] = useState(false);
-  const [copied, setCopied] = useState(false);
-
   // 解析已有的AI总结
-  useEffect(() => {
-    if (log.aiSummary) {
-      try {
-        setSummary(JSON.parse(log.aiSummary));
-      } catch {
-        setSummary(null);
-      }
-    } else {
-      setSummary(null);
+  const summary = useMemo(() => {
+    if (!log.aiSummary) return null;
+    try {
+      return JSON.parse(log.aiSummary) as AiExperimentSummaryResponse;
+    } catch {
+      return null;
     }
   }, [log.aiSummary]);
+
+  const [loadingSummary, setLoadingSummary] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   async function handleSummarize() {
     if (loadingSummary) return;

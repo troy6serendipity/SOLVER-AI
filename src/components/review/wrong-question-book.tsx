@@ -74,6 +74,7 @@ export function WrongQuestionBook({ refreshKey }: { refreshKey: number }) {
   }, [tagFilter, masteryFilter]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
     // refreshKey 变化时（新收入错题）强制刷新
   }, [load, refreshKey]);

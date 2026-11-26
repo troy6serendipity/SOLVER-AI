@@ -33,6 +33,55 @@ const nextConfig: NextConfig = {
       "./node_modules/pdf-parse/**",
     ],
   },
+  // 安全头配置
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          // XSS防护
+          {
+            key: "X-XSS-Protection",
+            value: "1; mode=block",
+          },
+          // 防止MIME类型嗅探
+          {
+            key: "X-Content-Type-Options",
+            value: "nosniff",
+          },
+          // 点击劫持防护
+          {
+            key: "X-Frame-Options",
+            value: "DENY",
+          },
+          // 内容安全策略（CSP）
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob:",
+              "font-src 'self'",
+              "connect-src 'self' https://api.openai.com https://api.deepseek.com",
+              "frame-src 'none'",
+              "object-src 'none'",
+            ].join("; "),
+          },
+          // 引用策略
+          {
+            key: "Referrer-Policy",
+            value: "strict-origin-when-cross-origin",
+          },
+          // 权限策略
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=()",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
