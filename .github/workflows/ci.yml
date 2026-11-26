@@ -1,0 +1,70 @@
+# SOLVER AI 持续集成工作流
+# 触发条件：向 main 分支推送，或针对 main 的 Pull Request
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# 同一分支的新推送自动取消旧任务，节省 CI 资源
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint, TypeCheck, Test & Build
+    runs-on: ubuntu-latest
+
+    env:
+      # 构建期仅需要存在合法格式的环境变量，不连接真实数据库 / 不调用真实 LLM
+      DATABASE_URL: "postgresql://ci_user:ci_password@localhost:5432/ci_db?sslmode=disable"
+      AUTH_SECRET: "ci-dummy-auth-secret-not-used-at-runtime-0000000000"
+      AUTH_TRUST_HOST: "true"
+      # CI 中强制 Mock 模型，保证构建与测试不依赖外部 API Key
+      LLM_MOCK: "true"
+      LLM_API_KEY: ""
+      STORAGE_ROOT: ".storage-ci"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        # postinstall 会自动执行 prisma generate，无需数据库连接
+        run: npm ci
+
+      - name: ESLint code style check
+        run: npm run lint
+
+      - name: TypeScript type check
+        run: npm run typecheck
+
+      - name: Unit tests with coverage
+        run: npm run test:ci
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          include-hidden-files: true
+          retention-days: 7
+
+      - name: Production build
+        run: npm run build
+
+      - name: Dependency security audit
+        # 安全审计为非阻断步骤：仅上报风险，不掩盖真实的构建/测试失败
+        # 已知上游依赖告警需在升级评估后处理，不能通过降低审计等级来"漂白"
+        continue-on-error: true
+        run: npm audit --audit-level=high

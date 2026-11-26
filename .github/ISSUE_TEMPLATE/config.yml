@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全漏洞私下披露
+    url: https://github.com/troy6serendipity/SOLVER-AI/security/policy
+    about: 请勿公开提交安全问题，请按 SECURITY.md 的流程私下报告。
+  - name: 项目主规范与路线图
+    url: https://github.com/troy6serendipity/SOLVER-AI/blob/main/SOLVER_AI_MASTER_SPEC.md
+    about: 提交功能建议前，请先阅读主规范中的产品规划与阶段路线图。

@@ -41,6 +41,9 @@ prisma/dev.db-journal
 # vercel
 .vercel
 
+# local storage
+.storage/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
