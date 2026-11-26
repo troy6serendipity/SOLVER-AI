@@ -44,36 +44,36 @@ describe("errors 统一错误框架", () => {
 
     it("开发环境下未知错误返回原始消息", () => {
       const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = "test";
+      (process.env as Record<string, unknown>).NODE_ENV = "test";
       const formatted = formatErrorResponse(new Error("意外崩溃"));
       expect(formatted.statusCode).toBe(500);
       expect(formatted.code).toBe("InternalServerError");
       expect(formatted.error).toBe("意外崩溃");
-      process.env.NODE_ENV = originalEnv;
+      (process.env as Record<string, unknown>).NODE_ENV = originalEnv;
     });
 
     it("生产环境下未知错误隐藏内部细节", () => {
       const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = "production";
+      (process.env as Record<string, unknown>).NODE_ENV = "production";
       const formatted = formatErrorResponse(new Error("敏感堆栈信息"));
       expect(formatted.error).toBe("服务器内部错误");
-      process.env.NODE_ENV = originalEnv;
+      (process.env as Record<string, unknown>).NODE_ENV = originalEnv;
     });
   });
 
   describe("withErrorHandler", () => {
     it("正常返回 handler 的 Response", async () => {
-      const handler = withErrorHandler(async () => Response.json({ ok: true }));
+      const handler = withErrorHandler(async (_request: Request) => Response.json({ ok: true }));
       const response = await handler(new Request("http://localhost/"));
       expect(response.status).toBe(200);
       await expect(response.json()).resolves.toEqual({ ok: true });
     });
 
     it("捕获 AppError 并转换为对应 HTTP 响应", async () => {
-      const handler = withErrorHandler(async () => {
+      const handler = withErrorHandler(async (_request: Request): Promise<Response> => {
         throw new ForbiddenError("禁止访问");
       });
-      const response = await handler(new Request("http://localhost/"));
+      const response: Response = await handler(new Request("http://localhost/"));
       expect(response.status).toBe(403);
       await expect(response.json()).resolves.toMatchObject({
         error: "禁止访问",
@@ -82,10 +82,10 @@ describe("errors 统一错误框架", () => {
     });
 
     it("未知异常统一兜底为 500", async () => {
-      const handler = withErrorHandler(async () => {
+      const handler = withErrorHandler(async (_request: Request): Promise<Response> => {
         throw new Error("boom");
       });
-      const response = await handler(new Request("http://localhost/"));
+      const response: Response = await handler(new Request("http://localhost/"));
       expect(response.status).toBe(500);
     });
   });

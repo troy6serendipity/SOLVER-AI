@@ -13,6 +13,8 @@ import {
   type ModelTier,
   type ScenarioKey,
 } from "@/lib/ai/models";
+import { checkRateLimit, checkQuota, logUsage } from "@/lib/ai/gateway";
+import { withErrorHandler } from "@/lib/errors";
 
 // 鉴权 + Prisma 落库均依赖请求时环境，强制动态渲染、Node Runtime。
 export const dynamic = "force-dynamic";
@@ -35,7 +37,7 @@ interface ChatRequestBody {
   system?: unknown;
 }
 
-export async function POST(request: Request) {
+export const POST = withErrorHandler(async (request: Request) => {
   // 1. 登录校验：未登录直接 401
   const session = await auth();
   const userId = session?.user?.id;
@@ -118,7 +120,11 @@ export async function POST(request: Request) {
     systemPrompt = body.system;
   }
 
-  // 5. 模型工厂：有 Key 走云端 OpenAI 兼容模型，无 Key 走本地 Mock
+  // 5. 检查速率限制和配额
+  await checkRateLimit(userId);
+  await checkQuota(userId, scenario);
+
+  // 模型工厂：有 Key 走云端 OpenAI 兼容模型，无 Key 走本地 Mock
   const { model, modelId, provider, mock } = await getChatModel(tier);
 
   // 6. 流式生成；onFinish 中把 Token 用量写入 AiUsageLog
@@ -130,19 +136,15 @@ export async function POST(request: Request) {
       try {
         const inputTokens = usage.inputTokens ?? 0;
         const outputTokens = usage.outputTokens ?? 0;
-        await prisma.aiUsageLog.create({
-          data: {
-            userId,
-            tier,
-            scenario,
-            provider,
-            model: modelId,
-            inputTokens,
-            outputTokens,
-            totalTokens: usage.totalTokens ?? inputTokens + outputTokens,
-            mock,
-          },
-        });
+        await logUsage(
+          userId,
+          scenario,
+          modelId,
+          provider,
+          tier,
+          inputTokens,
+          outputTokens
+        );
       } catch (error) {
         // 用量记录失败不应影响对话主链路
         console.error("[chat] 写入 AiUsageLog 失败:", error);
@@ -160,4 +162,4 @@ export async function POST(request: Request) {
       },
     }),
   });
-}
+});

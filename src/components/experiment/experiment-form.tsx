@@ -6,7 +6,7 @@ import type { ExperimentLogDetail } from "../types";
 
 interface ExperimentFormProps {
   initialData?: Partial<ExperimentLogDetail>;
-  onSubmit: (data: any) => Promise<void>;
+  onSubmit: (data: Partial<ExperimentLogDetail>) => Promise<void>;
   submitText?: string;
   isLoading?: boolean;
 }

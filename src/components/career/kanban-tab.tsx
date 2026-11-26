@@ -48,7 +48,8 @@ export function KanbanTab() {
   }
 
   useEffect(() => {
-    loadApplications();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadApplications();
   }, []);
 
   // 打开添加弹窗

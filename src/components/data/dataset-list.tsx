@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { listDataSets, deleteDataSet } from "@/lib/data/client-api";
 import type { DataSetListItem } from "@/lib/data/types";
 import { Button } from "@/components/ui/button";
@@ -16,12 +16,15 @@ export function DatasetList({ onSelect }: DatasetListProps) {
   const [datasets, setDatasets] = useState<DataSetListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
 
   async function loadList() {
     setLoading(true);
     try {
       const res = await listDataSets();
-      setDatasets(res.datasets);
+      startTransition(() => {
+        setDatasets(res.datasets);
+      });
     } catch (error) {
       alert(error instanceof Error ? error.message : "加载失败");
     } finally {
@@ -44,7 +47,8 @@ export function DatasetList({ onSelect }: DatasetListProps) {
   }
 
   useEffect(() => {
-    loadList();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadList();
   }, []);
 
   if (loading) {

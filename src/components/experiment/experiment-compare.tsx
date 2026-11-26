@@ -9,10 +9,10 @@ interface ExperimentCompareProps {
 
 export function ExperimentCompare({ log1, log2 }: ExperimentCompareProps) {
   // 比较两个值是否不同
-  function isDifferent(v1: any, v2: any): boolean {
+  function isDifferent(v1: unknown, v2: unknown): boolean {
     if (v1 === null && v2 === null) return false;
     if (v1 === undefined && v2 === undefined) return false;
-    if (typeof v1 === "object" && typeof v2 === "object") {
+    if (typeof v1 === "object" && v1 !== null && typeof v2 === "object" && v2 !== null) {
       return JSON.stringify(v1) !== JSON.stringify(v2);
     }
     return v1 !== v2;
